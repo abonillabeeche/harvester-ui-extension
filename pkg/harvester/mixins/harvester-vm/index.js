@@ -991,8 +991,24 @@ export default {
       // `shareable` is an attachment-level opt-in, remove the field
       // inherited from the old spec when the disk row no longer requests it
       mergedDisks.forEach((disk) => {
-        if (disk.shareable && !disks.find((D) => D.name === disk.name)?.shareable) {
+        const parsed = disks.find((D) => D.name === disk.name);
+
+        if (disk.shareable && !parsed?.shareable) {
           delete disk.shareable;
+        }
+
+        // High-performance fields are only serialized when requested (see
+        // parseDisk). When editing, mergeDeviceList would otherwise keep the
+        // previous spec's cache/io/dedicatedIOThread even after the row is
+        // switched back to "Default" or the dedicated I/O thread is unchecked,
+        // silently preserving stale values — strip them so the disk matches
+        // what the row actually requests.
+        if (parsed) {
+          ['cache', 'io', 'dedicatedIOThread'].forEach((field) => {
+            if (!parsed[field] && field in disk) {
+              delete disk[field];
+            }
+          });
         }
       });
 

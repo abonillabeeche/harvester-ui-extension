@@ -55,6 +55,10 @@ export default {
       return this.mode === _VIEW;
     },
 
+    storagePerformanceEnabled() {
+      return this.$store.getters['harvester-common/getFeatureEnabled']('highPerformanceStorage');
+    },
+
     ioThreadsPolicyOptions() {
       return IO_THREADS_POLICY.map((value) => ({
         label: value === '' ? this.t('harvester.virtualMachine.volume.diskPerformance.ioThreadsPolicy.default') : this.t(`harvester.virtualMachine.volume.diskPerformance.ioThreadsPolicy.${ value }`),
@@ -62,12 +66,23 @@ export default {
       }));
     },
   },
+
+  watch: {
+    // Block Multi-Queue only applies to virtio disks. If the last virtio disk is
+    // removed while it is enabled, clear it so the VM is not left with an invalid
+    // setting the disabled checkbox can no longer surface.
+    hasVirtioDisk(neu) {
+      if (!neu && this.blockMultiQueue) {
+        this.$emit('update:blockMultiQueue', false);
+      }
+    },
+  },
 };
 </script>
 
 <template>
   <InfoBox
-    v-if="!isView || blockMultiQueue || !!ioThreadsPolicy"
+    v-if="storagePerformanceEnabled && (!isView || blockMultiQueue || !!ioThreadsPolicy)"
     class="vm-perf mt-10"
   >
     <h3 class="mb-5">

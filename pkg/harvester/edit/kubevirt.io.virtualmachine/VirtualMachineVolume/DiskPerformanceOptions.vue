@@ -45,6 +45,10 @@ export default {
       return this.mode === _VIEW;
     },
 
+    storagePerformanceEnabled() {
+      return this.$store.getters['harvester-common/getFeatureEnabled']('highPerformanceStorage');
+    },
+
     isCdRom() {
       return this.value.type === 'cd-rom';
     },
@@ -68,8 +72,10 @@ export default {
       return DISK_CACHE_MODE.map((value) => ({
         label:    this.cacheLabel(value),
         value,
-        // Native AIO only works with an uncached (O_DIRECT) disk.
-        disabled: this.isNativeIo && value !== '' && value !== 'none',
+        // Native AIO only works with an uncached (O_DIRECT) disk, so while it is
+        // selected the only valid cache option is "none" — disable everything
+        // else, including "Default", to prevent an invalid combination.
+        disabled: this.isNativeIo && value !== 'none',
       }));
     },
 
@@ -147,8 +153,10 @@ export default {
 
     onIoChange(io) {
       this.value.io = io;
-      // Native AIO requires an uncached disk; align cache to keep the combo valid.
-      if (io === 'native' && this.value.cache && this.value.cache !== 'none') {
+      // Native AIO requires an uncached disk; force cache to "none" to keep the
+      // combo valid — including when cache is still on its "Default" ('') value,
+      // which libvirt would otherwise reject at domain start.
+      if (io === 'native' && this.value.cache !== 'none') {
         this.value.cache = 'none';
       }
       this.update();
@@ -163,13 +171,15 @@ export default {
 
 <template>
   <div
-    v-if="!isCdRom"
+    v-if="!isCdRom && storagePerformanceEnabled"
     class="disk-performance"
   >
     <button
       v-if="!isView"
       type="button"
       class="btn btn-sm role-link expand-toggle"
+      :aria-expanded="expanded"
+      :aria-label="expanded ? t('harvester.virtualMachine.volume.performance.collapse') : t('harvester.virtualMachine.volume.performance.expand')"
       @click.prevent="expanded = !expanded"
     >
       <i
