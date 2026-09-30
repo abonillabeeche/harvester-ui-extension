@@ -18,16 +18,24 @@ export const CATALOG_ANNOTATIONS = {
   INSTANCETYPE: 'catalog.harvesterhci.io/instancetype',
   PREFERENCE:   'catalog.harvesterhci.io/preference',
   IMAGE:        'catalog.harvesterhci.io/image',
+  TEMPLATE:     'catalog.harvesterhci.io/template',
 };
 
 const HCI_OS_TYPE = 'harvesterhci.io/os-type';
 const HCI_IMAGE_TYPE = 'harvesterhci.io/image-type';
 const HCI_CLUSTER_NETWORK = 'network.harvesterhci.io/clusternetwork';
 const HCI_VOLUME_MODE_ACCESS_MODES = 'cdi.harvesterhci.io/storageProfileVolumeModeAccessModes';
+const HCI_VM_OS = 'harvesterhci.io/os';
+const HCI_IMAGE_ID = 'harvesterhci.io/imageId';
+const HCI_VOLUME_CLAIM_TEMPLATES = 'harvesterhci.io/volumeClaimTemplates';
 
 export const MANAGEMENT_NETWORK = '__management__';
 export const FEATURED_SIZES = ['small', 'medium', 'large', 'xlarge'];
 export const DEFAULT_INSTANCETYPE = 'u1.medium';
+
+// Series that exist in common-instancetypes but make no sense to offer here
+// (d1 needs dedicated-CPU node setup that the catalog does not check for).
+export const HIDDEN_SERIES = ['d1'];
 
 export const SERIES_LABELS = {
   u1:  'General purpose',
@@ -609,6 +617,201 @@ export function harvesterShim(vm) {
   delete out.spec.instancetype;
   delete out.spec.preference;
   delete out.status;
+
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Harvester VM templates (Advanced > Templates)
+//
+// A template contributes everything except the boot image (the catalog OS
+// image replaces it) and CPU/memory (owned by the instancetype; KubeVirt's
+// expansion rejects a VM that sets both).
+
+// Domain fields an instancetype may own; dropped from the template only when
+// the selected instancetype actually sets them.
+const INSTANCETYPE_OWNED = ['ioThreadsPolicy', 'launchSecurity'];
+
+function templateClaims(tplVm) {
+  try {
+    return JSON.parse(tplVm?.metadata?.annotations?.[HCI_VOLUME_CLAIM_TEMPLATES] || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * The template disk that boots from an image: a non-cdrom disk backed by a
+ * claim carrying the imageId annotation (empty in the built-in templates).
+ * ISO templates boot a cdrom installer onto a blank disk, so they have none.
+ */
+export function templateRootDisk(tplVm) {
+  const spec = tplVm?.spec?.template?.spec || {};
+  const claims = templateClaims(tplVm);
+
+  for (const disk of spec.domain?.devices?.disks || []) {
+    if (disk.cdrom) {
+      continue;
+    }
+    const volume = (spec.volumes || []).find((v) => v.name === disk.name);
+    const claimName = volume?.persistentVolumeClaim?.claimName;
+    const claim = claims.find((c) => c.metadata?.name === claimName);
+
+    if (claim && HCI_IMAGE_ID in (claim.metadata?.annotations || {})) {
+      return {
+        disk, volume, claim
+      };
+    }
+  }
+
+  return null;
+}
+
+export function isImageTemplate(tplVm) {
+  return !!templateRootDisk(tplVm);
+}
+
+// Windows templates only fit Windows images and vice versa; templates without
+// an OS label fit anything.
+export function templateFitsImage(tplVm, image, preferenceName = '') {
+  const tplOs = tplVm?.metadata?.labels?.[HCI_VM_OS];
+
+  if (!tplOs) {
+    return true;
+  }
+  const imageOs = image?.metadata?.labels?.[HCI_OS_TYPE];
+  const isWindowsImage = imageOs === 'windows' || /^windows/.test(preferenceName || '');
+
+  return (tplOs === 'windows') === isWindowsImage;
+}
+
+export function templateDiskGi(tplVm) {
+  const storage = templateRootDisk(tplVm)?.claim?.spec?.resources?.requests?.storage;
+
+  return storage ? Math.ceil(parseQuantity(storage) / 2 ** 30) : 0;
+}
+
+function cloudInitVolumeName(spec) {
+  return (spec.volumes || []).find((v) => v.cloudInitNoCloud || v.cloudInitConfigDrive)?.name;
+}
+
+/**
+ * Layer a template under a catalog VM built by buildCatalogVm().
+ * The catalog keeps: image/root disk claim, cloud-init, network, name,
+ * run strategy and the instancetype/preference refs. The template supplies the
+ * rest (disk bus, extra disks, features, clock, firmware, TPM, NIC model, ...).
+ */
+export function applyTemplate(vm, tplVm, { instancetype, templateId } = {}) {
+  const root = templateRootDisk(tplVm);
+
+  if (!root) {
+    return vm;
+  }
+
+  const out = JSON.parse(JSON.stringify(vm));
+  const tpl = JSON.parse(JSON.stringify(tplVm));
+  const name = out.metadata.name;
+  const spec = out.spec.template.spec;
+  const tSpec = tpl.spec?.template?.spec || {};
+  const {
+    cpu, memory, resources, devices: tDevices = {}, ...tDomain
+  } = tSpec.domain || {};
+
+  INSTANCETYPE_OWNED.forEach((k) => {
+    if (instancetype?.spec?.[k] !== undefined) {
+      delete tDomain[k];
+    }
+  });
+
+  const tCloudInit = cloudInitVolumeName(tSpec);
+  const tCloudInitDisk = (tDevices.disks || []).find((d) => d.name === tCloudInit);
+  const [catalogRoot, catalogCloudInit] = spec.domain.devices.disks;
+  const [rootVolume, cloudInitVolume] = spec.volumes;
+  const claims = templateClaims(tplVm);
+  const ownClaims = JSON.parse(out.metadata.annotations[HCI_VOLUME_CLAIM_TEMPLATES]);
+
+  // Extra template disks (data disks, driver containerDisks, ...) come along;
+  // their claims get per-VM names like the regular create-from-template flow.
+  const extraDisks = [];
+  const extraVolumes = [];
+
+  for (const disk of tDevices.disks || []) {
+    if (disk.name === root.disk.name || disk.name === tCloudInit) {
+      continue;
+    }
+    const volume = (tSpec.volumes || []).find((v) => v.name === disk.name);
+
+    if (!volume) {
+      continue;
+    }
+    const claimName = volume.persistentVolumeClaim?.claimName;
+
+    if (claimName) {
+      const claim = claims.find((c) => c.metadata?.name === claimName);
+      const newName = `${ name }-${ disk.name }-${ randomSuffix() }`;
+
+      if (claim) {
+        ownClaims.push({ ...claim, metadata: { ...claim.metadata, name: newName } });
+      }
+      volume.persistentVolumeClaim = { ...volume.persistentVolumeClaim, claimName: newName };
+    }
+    extraDisks.push(disk);
+    extraVolumes.push(volume);
+  }
+
+  // Start from the template's root claim spec; the catalog's name, image,
+  // size, storage class and access/volume mode win.
+  ownClaims[0] = {
+    ...ownClaims[0],
+    spec: {
+      ...root.claim.spec,
+      ...ownClaims[0].spec,
+    },
+  };
+
+  const [tIface] = tDevices.interfaces || [];
+  const [iface] = spec.domain.devices.interfaces;
+
+  spec.domain = {
+    ...tDomain,
+    devices: {
+      ...tDevices,
+      disks: [
+        {
+          ...root.disk, name: catalogRoot.name, bootOrder: 1
+        },
+        // The catalog only adds a cloud-init disk when there is user data.
+        ...(catalogCloudInit ? [{ ...(tCloudInitDisk || catalogCloudInit), name: catalogCloudInit.name }] : []),
+        ...extraDisks,
+      ],
+      interfaces: [{ ...(tIface?.model ? { model: tIface.model } : {}), ...iface }],
+      inputs:     tDevices.inputs || spec.domain.devices.inputs,
+    },
+  };
+
+  const {
+    domain: _d, volumes: _v, networks: _n, hostname: _h, affinity: tAffinity, ...tRest
+  } = tSpec;
+
+  out.spec.template.spec = {
+    ...spec,
+    ...tRest,
+    ...(spec.affinity || tAffinity ? { affinity: spec.affinity || tAffinity } : {}),
+    domain:   spec.domain,
+    volumes:  [rootVolume, ...(cloudInitVolume ? [cloudInitVolume] : []), ...extraVolumes],
+    networks: spec.networks,
+    hostname: spec.hostname,
+  };
+
+  const { [HCI_VOLUME_CLAIM_TEMPLATES]: _c, ...tAnnotations } = tpl.metadata?.annotations || {};
+
+  out.metadata.labels = { ...(tpl.metadata?.labels || {}), ...out.metadata.labels };
+  out.metadata.annotations = {
+    ...tAnnotations,
+    ...out.metadata.annotations,
+    [HCI_VOLUME_CLAIM_TEMPLATES]: JSON.stringify(ownClaims),
+    ...(templateId ? { [CATALOG_ANNOTATIONS.TEMPLATE]: templateId } : {}),
+  };
 
   return out;
 }
