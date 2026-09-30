@@ -86,7 +86,7 @@ harvester:
   catalog:
     label: Catalog
     title: Catalog
-    description: "Pick an operating system and a size, then fill in the details. Sizes and OS defaults come from the cluster's KubeVirt instance types and preferences."
+    description: 'Choose an Operating System and a Template, then provide the remaining details. Sizes and OS defaults are based on the instance types and preferences.'
     disabledBanner:
       prefix: 'The VM Catalog add-on is disabled. Enable it under '
       link: 'Advanced > Addons'
@@ -94,6 +94,7 @@ harvester:
     steps:
       os: Operating system
       size: Size
+      template: Template
       details: Details
     emptyImages: 'No bootable disk images yet. Upload a qcow2 or raw image under Images and it will show up here.'
     distroMeta:
@@ -112,6 +113,10 @@ harvester:
       start: Start after creation
     network:
       management: Management network
+    templates:
+      note: 'Optional. Uses a template from Advanced > Templates for everything except the boot image and the CPU and memory, which come from the OS and size selected above.'
+      none: No template
+      noneDescription: 'Use the OS defaults from the instance type preference.'
     sizes:
       showCommon: Show common sizes
       showAll: 'Show all sizes ({count} more)'
@@ -129,6 +134,7 @@ harvester:
       empty: Nothing selected yet
       starts: starts on create
       stopped: stays stopped
+      template: 'template {name}'
     notifications:
       created: Virtual machine created
       createdMessage: '{namespace}/{name} from {size}'

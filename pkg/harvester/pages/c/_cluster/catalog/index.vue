@@ -18,6 +18,7 @@ import {
   LABEL_DEFAULT_INSTANCETYPE,
   DEFAULT_INSTANCETYPE,
   FEATURED_SIZES,
+  HIDDEN_SERIES,
   SERIES_LABELS,
   MANAGEMENT_NETWORK,
   isCatalogImage,
@@ -30,9 +31,14 @@ import {
   cleanExpanded,
   harvesterShim,
   suggestName,
+  isImageTemplate,
+  templateFitsImage,
+  templateDiskGi,
+  applyTemplate,
 } from '../../../../utils/catalog';
 
 const NO_PREFERENCE = '__none__';
+const NO_TEMPLATE = null;
 const SYSTEM_NS = /^(kube-|cattle-|fleet-|harvester-system|longhorn-system|local$|p-)/;
 const DNS_1123 = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 
@@ -55,12 +61,15 @@ export default {
       networks:      [],
       sshKeys:       [],
       namespaces:    [],
+      templates:     [],
+      versions:      [],
 
       distroKey:     null,
       imageId:       null,
       series:        'u1',
       showAllSizes:  false,
       instancetype:  null,
+      templateId:    NO_TEMPLATE,
       name:          '',
       suggestedName: '',
       start:         true,
@@ -81,9 +90,10 @@ export default {
       return [];
     });
 
-    const [images, prefs, types, nads, keys, ns, addons] = await Promise.all([
+    const [images, prefs, types, nads, keys, ns, addons, templates, versions] = await Promise.all([
       load(HCI.IMAGE), load(CLUSTER_PREFERENCE), load(CLUSTER_INSTANCETYPE),
       load(NETWORK_ATTACHMENT), load(HCI.SSH), load(NAMESPACE), load(HCI.ADD_ONS),
+      load(HCI.VM_TEMPLATE), load(HCI.VM_VERSION),
     ]);
 
     const catalogAddon = (addons || []).find((a) => a.metadata?.name === ADD_ONS.VM_CATALOG);
@@ -94,6 +104,8 @@ export default {
     this.instancetypes = types;
     this.networks = nads.filter((n) => n.metadata?.labels?.['network.harvesterhci.io/type']);
     this.sshKeys = keys;
+    this.templates = templates;
+    this.versions = versions;
     this.namespaces = ns.map((n) => n.metadata.name).filter((n) => !SYSTEM_NS.test(n));
     this.loading = false;
   },
@@ -148,7 +160,7 @@ export default {
     },
 
     seriesOptions() {
-      const present = [...new Set(this.instancetypes.map((t) => sizeOf(t).series))];
+      const present = [...new Set(this.instancetypes.map((t) => sizeOf(t).series))].filter((s) => !HIDDEN_SERIES.includes(s));
 
       return present
         .sort((a, b) => (Object.keys(SERIES_LABELS).indexOf(a) + 1 || 99) - (Object.keys(SERIES_LABELS).indexOf(b) + 1 || 99))
@@ -180,6 +192,30 @@ export default {
 
     selectedSize() {
       return this.instancetypes.map(sizeOf).find((s) => s.name === this.instancetype) || null;
+    },
+
+    // Image-based templates (ISO installer templates don't fit an OS-image flow)
+    // that match the selected OS, each resolved to its default version.
+    templateOptions() {
+      const versionById = Object.fromEntries(this.versions.map((v) => [v.id, v]));
+
+      return this.templates
+        .map((t) => ({ template: t, version: versionById[t.spec?.defaultVersionId] }))
+        .filter(({ version }) => version && isImageTemplate(version.spec?.vm))
+        .filter(({ version }) => !this.image || templateFitsImage(version.spec.vm, this.image, this.distro?.preference))
+        .map(({ template, version }) => ({
+          id:          template.id,
+          name:        template.metadata.name.replace(/-template$/, ''),
+          namespace:   template.metadata.namespace,
+          description: template.spec?.description || '',
+          vm:          version.spec.vm,
+          versionId:   version.id,
+        }))
+        .sort((a, b) => (a.namespace !== 'harvester-public') - (b.namespace !== 'harvester-public') || a.name.localeCompare(b.name));
+    },
+
+    selectedTemplate() {
+      return this.templateOptions.find((t) => t.id === this.templateId) || null;
     },
 
     networkOptions() {
@@ -223,6 +259,9 @@ export default {
       }
       if (this.selectedSize) {
         parts.push(`${ this.selectedSize.name } (${ this.selectedSize.cpu } vCPU, ${ formatGi(this.selectedSize.memory) })`);
+      }
+      if (this.selectedTemplate) {
+        parts.push(this.t('harvester.catalog.summary.template', { name: this.selectedTemplate.name }));
       }
       if (this.diskGi) {
         parts.push(`${ this.diskGi } GiB disk`);
@@ -278,6 +317,21 @@ export default {
     series() {
       this.showAllSizes = false;
     },
+
+    // Drop a template that no longer fits the newly selected OS.
+    templateOptions(options) {
+      if (this.templateId !== NO_TEMPLATE && !options.some((t) => t.id === this.templateId)) {
+        this.templateId = NO_TEMPLATE;
+      }
+    },
+
+    selectedTemplate(tpl) {
+      const fromTemplate = tpl ? templateDiskGi(tpl.vm) : 0;
+
+      if (this.image) {
+        this.diskGi = Math.max(this.minDiskGi, fromTemplate || 10);
+      }
+    },
   },
 
   methods: {
@@ -294,7 +348,7 @@ export default {
     buildVm() {
       const byId = (list, id) => list.find((x) => x.id === id);
 
-      return buildCatalogVm({
+      const vm = buildCatalogVm({
         name:         this.name,
         namespace:    this.namespace,
         image:        this.image,
@@ -305,6 +359,15 @@ export default {
         sshKeys:      this.sshKeyIds.map((id) => byId(this.sshKeys, id)).filter(Boolean),
         password:     this.password,
         start:        this.start,
+      });
+
+      if (!this.selectedTemplate) {
+        return vm;
+      }
+
+      return applyTemplate(vm, this.selectedTemplate.vm, {
+        instancetype: this.instancetypes.find((t) => t.metadata.name === this.instancetype),
+        templateId:   this.selectedTemplate.versionId,
       });
     },
 
@@ -331,7 +394,11 @@ export default {
 
         this.preview = {
           domain: JSON.stringify(expanded.spec.template.spec.domain, null, 2),
-          refs:   JSON.stringify({ instancetype: requested.spec.instancetype, preference: requested.spec.preference }, null, 2),
+          refs:   JSON.stringify({
+            instancetype: requested.spec.instancetype,
+            preference:   requested.spec.preference,
+            ...(this.selectedTemplate ? { template: this.selectedTemplate.versionId } : {}),
+          }, null, 2),
         };
       } catch (err) {
         this.errors = exceptionToErrorsArray(err?.data || err);
@@ -532,12 +599,56 @@ export default {
       </button>
     </section>
 
-    <!-- 3. Details -->
+    <!-- 3. Template -->
+    <section
+      class="vm-catalog__step"
+      :class="{ 'is-waiting': !image }"
+    >
+      <h2><span class="vm-catalog__num">3</span>{{ t('harvester.catalog.steps.template') }}</h2>
+      <p class="text-muted mb-10">
+        {{ t('harvester.catalog.templates.note') }}
+      </p>
+
+      <div
+        class="template-grid"
+        role="radiogroup"
+        :aria-label="t('harvester.catalog.steps.template')"
+      >
+        <button
+          type="button"
+          role="radio"
+          class="template"
+          :class="{ 'is-selected': !templateId }"
+          :aria-checked="!templateId"
+          @click="templateId = null"
+        >
+          <span class="template__name">{{ t('harvester.catalog.templates.none') }}</span>
+          <span class="template__desc">{{ t('harvester.catalog.templates.noneDescription') }}</span>
+        </button>
+        <button
+          v-for="tpl in templateOptions"
+          :key="tpl.id"
+          type="button"
+          role="radio"
+          class="template"
+          :class="{ 'is-selected': tpl.id === templateId }"
+          :aria-checked="tpl.id === templateId"
+          :title="tpl.description"
+          @click="templateId = tpl.id"
+        >
+          <span class="template__name">{{ tpl.name }}</span>
+          <span class="template__desc">{{ tpl.description }}</span>
+          <span class="template__ns">{{ tpl.namespace }}</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 4. Details -->
     <section
       class="vm-catalog__step"
       :class="{ 'is-waiting': !image || !instancetype }"
     >
-      <h2><span class="vm-catalog__num">3</span>{{ t('harvester.catalog.steps.details') }}</h2>
+      <h2><span class="vm-catalog__num">4</span>{{ t('harvester.catalog.steps.details') }}</h2>
       <div class="details">
         <LabeledInput
           v-model:value="name"
@@ -682,6 +793,7 @@ export default {
 // line-height; tiles need the opposite, so reset them explicitly.
 button.distro,
 button.size,
+button.template,
 button.series__tab {
   appearance: none;
   height: auto;
@@ -819,6 +931,39 @@ button.series__tab {
   }
 
   &__name { font-size: 12px; color: var(--muted); }
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.template {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 6px;
+
+  &__name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  // Built-in descriptions run long; keep tiles even and show the rest on hover.
+  &__desc {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  &__ns { font-size: 12px; color: var(--muted); margin-top: auto; }
 }
 
 .details {

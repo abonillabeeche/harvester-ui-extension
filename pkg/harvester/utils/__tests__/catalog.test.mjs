@@ -14,6 +14,11 @@ import {
   expandPath,
   cleanExpanded,
   harvesterShim,
+  templateRootDisk,
+  isImageTemplate,
+  templateFitsImage,
+  templateDiskGi,
+  applyTemplate,
   CATALOG_ANNOTATIONS,
   MANAGEMENT_NETWORK,
 } from '../catalog.js';
@@ -276,6 +281,164 @@ describe('catalog.js unit tests', () => {
 
       const shimmed = harvesterShim(expandedVm);
       assert.equal(shimmed.spec.template.spec.domain.resources.limits.memory, '8Gi');
+    });
+  });
+  describe('templates', () => {
+    const claims = (list) => JSON.stringify(list.map(([name, image, size]) => ({
+      metadata: { name, ...(image === undefined ? {} : { annotations: { 'harvesterhci.io/imageId': image } }) },
+      spec:     {
+        accessModes: ['ReadWriteMany'], volumeMode: 'Block', resources: { requests: { storage: size } }
+      },
+    })));
+
+    // Shaped like harvester-public/windows-image-optimized.
+    const windowsImageTpl = {
+      metadata: {
+        labels:      { 'harvesterhci.io/os': 'windows' },
+        annotations: {
+          'harvesterhci.io/reservedMemory':       '256Mi',
+          'harvesterhci.io/volumeClaimTemplates': claims([['pvc-rootdisk', '', '64Gi'], ['pvc-data', undefined, '5Gi']]),
+        },
+      },
+      spec: {
+        runStrategy: 'RerunOnFailure',
+        template:    {
+          spec: {
+            domain: {
+              cpu:      { cores: 4 },
+              memory:   { guest: '16Gi' },
+              features: { hyperv: { relaxed: { enabled: true } } },
+              clock:    { utc: {} },
+              devices:  {
+                disks: [
+                  { name: 'rootdisk', bootOrder: 1, disk: { bus: 'virtio' } },
+                  { name: 'data', disk: { bus: 'scsi' } },
+                ],
+                interfaces: [{ name: 'default', masquerade: {}, model: 'e1000' }],
+                tpm:        {},
+              },
+              resources: { limits: { cpu: '4', memory: '16Gi' } },
+            },
+            evictionStrategy: 'LiveMigrate',
+            networks:         [{ name: 'default', pod: {} }],
+            volumes:          [
+              { name: 'rootdisk', persistentVolumeClaim: { claimName: 'pvc-rootdisk' } },
+              { name: 'data', persistentVolumeClaim: { claimName: 'pvc-data' } },
+              { name: 'cloudinitdisk', cloudInitNoCloud: { secretRef: { name: 'windows-image-template-userdata' } } },
+            ],
+          },
+        },
+      },
+    };
+
+    // Shaped like harvester-public/iso-image-base-version: image on a cdrom.
+    const isoTpl = {
+      metadata: { annotations: { 'harvesterhci.io/volumeClaimTemplates': claims([['pvc-cdrom-disk', '', '10Gi'], ['pvc-rootdisk', undefined, '10Gi']]) } },
+      spec:     {
+        template: {
+          spec: {
+            domain: {
+              devices: {
+                disks: [
+                  { name: 'cdrom-disk', bootOrder: 2, cdrom: { bus: 'sata' } },
+                  { name: 'rootdisk', bootOrder: 1, disk: { bus: 'virtio' } },
+                ]
+              }
+            },
+            volumes: [
+              { name: 'cdrom-disk', persistentVolumeClaim: { claimName: 'pvc-cdrom-disk' } },
+              { name: 'rootdisk', persistentVolumeClaim: { claimName: 'pvc-rootdisk' } },
+            ],
+          },
+        },
+      },
+    };
+
+    const image = {
+      metadata: { name: 'win2025', namespace: 'default', labels: { 'harvesterhci.io/os-type': 'windows' } },
+      status:   { storageClassName: 'longhorn-win2025' },
+    };
+
+    const catalogVm = () => buildCatalogVm({
+      name: 'win-maple-abc', namespace: 'default', image, instancetype: 'u1.large', preference: 'windows.2k25.virtio', diskGi: 80
+    });
+
+    it('treats only image-booting (non-cdrom) templates as usable', () => {
+      assert.equal(templateRootDisk(windowsImageTpl).disk.name, 'rootdisk');
+      assert.equal(isImageTemplate(windowsImageTpl), true);
+      assert.equal(isImageTemplate(isoTpl), false);
+      assert.equal(isImageTemplate({}), false);
+    });
+
+    it('matches Windows templates to Windows images only', () => {
+      const leap = { metadata: { labels: { 'harvesterhci.io/os-type': 'openSUSE' } } };
+      const unlabeled = { metadata: {} };
+
+      assert.equal(templateFitsImage(windowsImageTpl, image), true);
+      assert.equal(templateFitsImage(windowsImageTpl, leap), false);
+      assert.equal(templateFitsImage(windowsImageTpl, unlabeled, 'windows.2k22'), true);
+      assert.equal(templateFitsImage(isoTpl, leap), true);
+    });
+
+    it('reads the root disk size from the template claim', () => {
+      assert.equal(templateDiskGi(windowsImageTpl), 64);
+    });
+
+    it('keeps the template settings but the catalog image, sizing and cloud-init', () => {
+      const vm = applyTemplate(catalogVm(), windowsImageTpl, { templateId: 'harvester-public/windows-image-optimized' });
+      const spec = vm.spec.template.spec;
+      const claimsOut = JSON.parse(vm.metadata.annotations['harvesterhci.io/volumeClaimTemplates']);
+
+      // instancetype owns CPU/memory
+      assert.equal(spec.domain.cpu, undefined);
+      assert.equal(spec.domain.memory, undefined);
+      assert.equal(spec.domain.resources, undefined);
+      assert.equal(vm.spec.instancetype.name, 'u1.large');
+
+      // template settings carried over
+      assert.deepEqual(spec.domain.features, { hyperv: { relaxed: { enabled: true } } });
+      assert.deepEqual(spec.domain.devices.tpm, {});
+      assert.equal(spec.evictionStrategy, 'LiveMigrate');
+      assert.equal(spec.domain.devices.interfaces[0].model, 'e1000');
+      assert.equal(vm.metadata.annotations['harvesterhci.io/reservedMemory'], '256Mi');
+      assert.equal(vm.metadata.annotations[CATALOG_ANNOTATIONS.TEMPLATE], 'harvester-public/windows-image-optimized');
+
+      // root disk: template bus, catalog image/size/storage class
+      assert.deepEqual(spec.domain.devices.disks[0], { name: 'disk-0', bootOrder: 1, disk: { bus: 'virtio' } });
+      assert.equal(claimsOut[0].metadata.annotations['harvesterhci.io/imageId'], 'default/win2025');
+      assert.equal(claimsOut[0].spec.resources.requests.storage, '80Gi');
+      assert.equal(claimsOut[0].spec.storageClassName, 'longhorn-win2025');
+
+      // extra data disk kept with a per-VM claim name
+      const data = spec.volumes.find((v) => v.name === 'data');
+
+      assert.match(data.persistentVolumeClaim.claimName, /^win-maple-abc-data-/);
+      assert.equal(claimsOut[1].metadata.name, data.persistentVolumeClaim.claimName);
+
+      // cloud-init is the catalog's, not a secret from the template namespace
+      const ci = spec.volumes.find((v) => v.name === 'cloudinitdisk');
+
+      assert.equal(ci.cloudInitNoCloud.secretRef, undefined);
+      assert.match(ci.cloudInitNoCloud.userData, /^#cloud-config/);
+      assert.equal(spec.volumes.length, 3);
+    });
+
+    it('drops instancetype-owned domain fields only when the instancetype sets them', () => {
+      const tpl = JSON.parse(JSON.stringify(windowsImageTpl));
+
+      tpl.spec.template.spec.domain.ioThreadsPolicy = 'auto';
+
+      const plain = applyTemplate(catalogVm(), tpl, { instancetype: { spec: {} } });
+      const owned = applyTemplate(catalogVm(), tpl, { instancetype: { spec: { ioThreadsPolicy: 'shared' } } });
+
+      assert.equal(plain.spec.template.spec.domain.ioThreadsPolicy, 'auto');
+      assert.equal(owned.spec.template.spec.domain.ioThreadsPolicy, undefined);
+    });
+
+    it('returns the VM unchanged for a non-image template', () => {
+      const vm = catalogVm();
+
+      assert.equal(applyTemplate(vm, isoTpl), vm);
     });
   });
 });
