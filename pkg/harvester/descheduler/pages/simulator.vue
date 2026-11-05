@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Banner } from '@components/Banner';
-import WhatIf from '../components/WhatIf.vue';
+import Simulator from '../components/Simulator.vue';
 import PageHeader from '../components/PageHeader.vue';
 import { useTranslation } from '../utils/i18n';
 import { useData } from '../utils/useData';
@@ -17,8 +17,8 @@ const run = computed(() => runState(state.value?.addon || null, state.value?.dep
 <template>
   <div class="descheduler">
     <PageHeader
-      :title="t('harvester.descheduler.whatif.title')"
-      :subtitle="t('harvester.descheduler.whatif.subtitle')"
+      :title="t('harvester.descheduler.simulator.title')"
+      :subtitle="t('harvester.descheduler.simulator.subtitle')"
       :updated="updated"
       :errors="errors"
       @refresh="refresh"
@@ -35,7 +35,7 @@ const run = computed(() => runState(state.value?.addon || null, state.value?.dep
         :label="t(`harvester.descheduler.run.${ run }`)"
       />
 
-      <WhatIf
+      <Simulator
         v-if="dataOk"
         :nodes="rawNodes"
         :pods="rawPods"

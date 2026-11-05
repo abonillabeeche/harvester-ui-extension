@@ -1,5 +1,5 @@
 import Overview from '../pages/overview.vue';
-import WhatIfPage from '../pages/whatif.vue';
+import SimulatorPage from '../pages/simulator.vue';
 import HistoryPage from '../pages/history.vue';
 import { PAGES } from './names';
 const page = (p, component) => ({
@@ -8,6 +8,6 @@ const page = (p, component) => ({
 
 export const deschedulerRoutes = [
   page(PAGES.overview, Overview),
-  page(PAGES.whatif, WhatIfPage),
+  page(PAGES.simulator, SimulatorPage),
   page(PAGES.history, HistoryPage)
 ];

@@ -15,6 +15,7 @@ import {
 import { loadDryRun, loadNamespaces } from '../utils/api';
 import NodeBeforeAfter from './NodeBeforeAfter.vue';
 import StepHeader from './StepHeader.vue';
+import InfoTip from './InfoTip.vue';
 import { routeCounts } from '../utils/moves';
 import { simulateRange } from '../utils/range';
 import { invalidNamespaces, namespaceOptions, sameSet } from '../utils/namespaces';
@@ -136,13 +137,13 @@ const color = computed(() => {
 });
 const summary = computed(() => {
   if (!sim.value.evictions.length) {
-    return t(`harvester.descheduler.whatif.result.${ sim.value.reason }`);
+    return t(`harvester.descheduler.simulator.result.${ sim.value.reason }`);
   }
   if (range.value && varies.value) {
-    return t(`harvester.descheduler.whatif.result.${ range.value.exact ? 'range' : 'rangeApprox' }`, { min: range.value.min, max: range.value.max });
+    return t(`harvester.descheduler.simulator.result.${ range.value.exact ? 'range' : 'rangeApprox' }`, { min: range.value.min, max: range.value.max });
   }
 
-  return t('harvester.descheduler.whatif.result.moves', { count: sim.value.evictions.length });
+  return t('harvester.descheduler.simulator.result.moves', { count: sim.value.evictions.length });
 });
 // The moves as table rows. A cluster can send many VMs at once, so they go in a sortable, searchable, paged table.
 const evictionRows = computed(() => sim.value.evictions.map((e) => ({
@@ -156,16 +157,16 @@ const evictionRows = computed(() => sim.value.evictions.map((e) => ({
 })));
 const evictionHeaders = [
   {
-    name: 'vm', labelKey: 'harvester.descheduler.whatif.vm', value: 'vm', sort: ['vm']
+    name: 'vm', labelKey: 'harvester.descheduler.simulator.vm', value: 'vm', sort: ['vm']
   },
   {
-    name: 'from', labelKey: 'harvester.descheduler.whatif.from', value: 'from', sort: ['from', 'vm'], width: 180
+    name: 'from', labelKey: 'harvester.descheduler.simulator.from', value: 'from', sort: ['from', 'vm'], width: 180
   },
   {
-    name: 'to', labelKey: 'harvester.descheduler.whatif.to', value: 'to', sort: ['to', 'vm'], width: 180
+    name: 'to', labelKey: 'harvester.descheduler.simulator.to', value: 'to', sort: ['to', 'vm'], width: 180
   },
   {
-    name: 'size', labelKey: 'harvester.descheduler.whatif.size', value: 'size', sort: ['cpu', 'memory'], width: 220
+    name: 'size', labelKey: 'harvester.descheduler.simulator.size', value: 'size', sort: ['cpu', 'memory'], width: 220
   }
 ];
 const routes = computed(() => routeCounts(sim.value.evictions));
@@ -175,7 +176,7 @@ const possible = computed(() => Object.entries(range.value?.possible || {}).map(
   always:    names.filter((n) => range.value?.certain.includes(n)),
   sometimes: names.filter((n) => !range.value?.certain.includes(n))
 })));
-const skippedText = (s) => `${ s.vm }: ${ t(`harvester.descheduler.whatif.why.${ s.why }`) }`;
+const skippedText = (s) => `${ s.vm }: ${ t(`harvester.descheduler.simulator.why.${ s.why }`) }`;
 // --- verify with the real descheduler (a dry-run Job that the user applies; this page never writes) ---
 const generated = ref(null);
 const generatedForm = ref(null);
@@ -245,13 +246,13 @@ async function check() {
   <div class="steps">
     <section
       class="step"
-      aria-labelledby="wi-step1"
+      aria-labelledby="sim-step1"
     >
       <StepHeader
-        id="wi-step1"
+        id="sim-step1"
         :step="1"
         :title="t('harvester.descheduler.steps.settings')"
-        :hint="t('harvester.descheduler.whatif.note')"
+        :info="t('harvester.descheduler.simulator.note')"
       />
 
       <div class="form">
@@ -291,7 +292,7 @@ async function check() {
         <div class="ns">
           <LabeledSelect
             v-model:value="form.excluded"
-            :label="t('harvester.descheduler.whatif.excluded')"
+            :label="t('harvester.descheduler.simulator.excluded')"
             :options="nsOptions"
             :multiple="true"
             :taggable="nsFailed"
@@ -304,7 +305,7 @@ async function check() {
       <Banner
         v-if="badNamespaces.length"
         color="error"
-        :label="t('harvester.descheduler.whatif.badNamespaces', { list: badNamespaces.join(', ') })"
+        :label="t('harvester.descheduler.simulator.badNamespaces', { list: badNamespaces.join(', ') })"
       />
       <div class="form-foot">
         <button
@@ -312,24 +313,24 @@ async function check() {
           :disabled="!policy"
           @click="reset"
         >
-          {{ t('harvester.descheduler.whatif.reset') }}
+          {{ t('harvester.descheduler.simulator.reset') }}
         </button>
         <span
           v-if="changed"
           class="text-muted"
-        >{{ t('harvester.descheduler.whatif.changed') }}</span>
+        >{{ t('harvester.descheduler.simulator.changed') }}</span>
       </div>
     </section>
 
     <section
       class="step"
-      aria-labelledby="wi-step2"
+      aria-labelledby="sim-step2"
     >
       <StepHeader
-        id="wi-step2"
+        id="sim-step2"
         :step="2"
         :title="t('harvester.descheduler.steps.move')"
-        :hint="t('harvester.descheduler.steps.moveHint')"
+        :info="t('harvester.descheduler.steps.moveHint')"
       />
 
       <div
@@ -345,23 +346,21 @@ async function check() {
       <ul
         v-if="routes.length"
         class="routes"
-        :aria-label="t('harvester.descheduler.whatif.routesLabel')"
+        :aria-label="t('harvester.descheduler.simulator.routesLabel')"
       >
         <li
           v-for="r in routes"
           :key="`${ r.from }-${ r.to }`"
           class="route"
         >
-          {{ t('harvester.descheduler.whatif.route', { from: r.from, to: r.to, count: r.count }) }}
+          {{ t('harvester.descheduler.simulator.route', { from: r.from, to: r.to, count: r.count }) }}
         </li>
       </ul>
 
       <h3 class="sub-title">
-        {{ t('harvester.descheduler.whatif.nodes.title') }}
+        {{ t('harvester.descheduler.simulator.nodes.title') }}
+        <InfoTip :text="t('harvester.descheduler.simulator.nodes.note')" />
       </h3>
-      <p class="text-muted">
-        {{ t('harvester.descheduler.whatif.nodes.note') }}
-      </p>
       <div class="node-grid">
         <NodeBeforeAfter
           v-for="c in cards"
@@ -389,35 +388,30 @@ async function check() {
       >
         <template #header-left>
           <h3 class="sub-title">
-            {{ t(varies ? 'harvester.descheduler.whatif.exampleTitle' : 'harvester.descheduler.whatif.movesTitle', { count: evictionRows.length }) }}
+            {{ t(varies ? 'harvester.descheduler.simulator.exampleTitle' : 'harvester.descheduler.simulator.movesTitle', { count: evictionRows.length }) }}
+            <InfoTip :text="t('harvester.descheduler.simulator.tieNote')" />
           </h3>
         </template>
       </SortableTable>
-      <p
-        v-if="evictionRows.length"
-        class="text-muted"
-      >
-        {{ t('harvester.descheduler.whatif.tieNote') }}
-      </p>
 
       <details
         v-for="p in possible"
         :key="p.node"
         class="fold"
       >
-        <summary>{{ t('harvester.descheduler.whatif.possibleSummary', { node: p.node, count: p.count }) }}</summary>
+        <summary>{{ t('harvester.descheduler.simulator.possibleSummary', { node: p.node, count: p.count }) }}</summary>
         <p v-if="p.always.length">
-          {{ t('harvester.descheduler.whatif.always', { list: p.always.join(', ') }) }}
+          {{ t('harvester.descheduler.simulator.always', { list: p.always.join(', ') }) }}
         </p>
         <p v-if="p.sometimes.length">
-          {{ t('harvester.descheduler.whatif.sometimes', { list: p.sometimes.join(', ') }) }}
+          {{ t('harvester.descheduler.simulator.sometimes', { list: p.sometimes.join(', ') }) }}
         </p>
       </details>
       <details
         v-if="sim.skipped.length"
         class="fold"
       >
-        <summary>{{ t('harvester.descheduler.whatif.skippedSummary', { count: sim.skipped.length }) }}</summary>
+        <summary>{{ t('harvester.descheduler.simulator.skippedSummary', { count: sim.skipped.length }) }}</summary>
         <ul>
           <li
             v-for="sk in sim.skipped"
@@ -431,13 +425,13 @@ async function check() {
 
     <section
       class="step verify"
-      aria-labelledby="wi-step3"
+      aria-labelledby="sim-step3"
     >
       <StepHeader
-        id="wi-step3"
+        id="sim-step3"
         :step="3"
         :title="t('harvester.descheduler.verify.title')"
-        :hint="t('harvester.descheduler.verify.note')"
+        :info="t('harvester.descheduler.verify.note')"
       />
 
       <ol class="substeps">
@@ -585,7 +579,8 @@ async function check() {
     </section>
 
     <p class="text-muted caveat">
-      {{ t('harvester.descheduler.whatif.caveat') }}
+      {{ t('harvester.descheduler.simulator.caveatShort') }}
+      <InfoTip :text="t('harvester.descheduler.simulator.caveat')" />
     </p>
   </div>
 </template>

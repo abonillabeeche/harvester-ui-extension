@@ -20,7 +20,7 @@ const changeLeft = computed(() => `${ clamp(Math.min(props.before, props.after))
 const changeWidth = computed(() => `${ clamp(Math.max(props.before, props.after)) - clamp(Math.min(props.before, props.after)) }%`);
 const grew = computed(() => props.after > props.before);
 const aria = computed(() => [
-  props.before === props.after ? `${ props.label } ${ props.after }%` : t('harvester.descheduler.whatif.barChange', {
+  props.before === props.after ? `${ props.label } ${ props.after }%` : t('harvester.descheduler.simulator.barChange', {
     label: props.label, before: props.before, after: props.after
   }),
   props.low !== undefined ? t('harvester.descheduler.nodes.markLow', { value: props.low }) : '',

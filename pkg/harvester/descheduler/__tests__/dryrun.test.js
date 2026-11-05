@@ -29,7 +29,7 @@ const F = {
 };
 
 describe('buildPolicyYaml', () => {
-  it('changes only the what-if values and keeps the rest', () => {
+  it('changes only the simulator values and keeps the rest', () => {
     const out = parseYaml(buildPolicyYaml(RAW, F), yamlLib);
     const lno = out.profiles[0].pluginConfig[1].args;
 

@@ -6,7 +6,7 @@ import { loadDescheduler, loadNodes, loadPods } from './api';
 import { nodeUsage } from './utilization';
 /**
  * The cluster data every page needs (nodes, pods, the add-on and its policy), loaded through the dashboard session.
- * `autoRefreshMs` > 0 reloads on a timer (the overview); the What-if page passes 0 so numbers do not move under an edit.
+ * `autoRefreshMs` > 0 reloads on a timer (the overview); the Simulator page passes 0 so numbers do not move under an edit.
  */
 export function useData(autoRefreshMs = 0) {
   const store = useStore();

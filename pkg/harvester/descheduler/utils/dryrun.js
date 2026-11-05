@@ -10,7 +10,7 @@ import { thresholdsValid } from './simulate';
  * Without --descheduling-interval the binary runs one cycle and exits.
  */
 export const DRYRUN_LABEL = 'descheduler-dry-run';
-/** The live policy with only the what-if values changed (everything else, e.g. excluded namespaces, stays as is). */
+/** The live policy with only the simulator values changed (everything else, e.g. excluded namespaces, stays as is). */
 export function buildPolicyYaml(policyRaw, f, lib = yaml) {
   const policy = parseYaml(policyRaw, lib);
   let found = false;

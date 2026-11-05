@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Banner } from '@components/Banner';
+import InfoTip from '../components/InfoTip.vue';
 import UtilizationBar from '../components/UtilizationBar.vue';
 import PageHeader from '../components/PageHeader.vue';
 import { useTranslation } from '../utils/i18n';
@@ -111,18 +112,16 @@ const excludedNamespaces = computed(() => state.value?.policy?.evictableNamespac
             class="summary-title"
           >
             {{ t('harvester.descheduler.policy.title') }}
+            <InfoTip
+              v-if="descheduler"
+              :text="t('harvester.descheduler.policy.note')"
+            />
           </h3>
           <p
             v-if="!descheduler"
             class="text-muted"
           >
             {{ t('harvester.descheduler.status.unavailable') }}
-          </p>
-          <p
-            v-else
-            class="text-muted"
-          >
-            {{ t('harvester.descheduler.policy.note') }}
           </p>
           <Banner
             v-if="state?.policyError"
@@ -169,10 +168,8 @@ const excludedNamespaces = computed(() => state.value?.policy?.evictableNamespac
       <template v-if="dataOk">
         <h2 class="nodes-title">
           {{ t('harvester.descheduler.nodes.title') }}
+          <InfoTip :text="t('harvester.descheduler.nodes.note')" />
         </h2>
-        <p class="text-muted">
-          {{ t('harvester.descheduler.nodes.note') }}
-        </p>
         <div class="grid">
           <section
             v-for="u in usages"

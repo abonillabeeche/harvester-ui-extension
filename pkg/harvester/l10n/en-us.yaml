@@ -2529,7 +2529,7 @@ harvester:
     nav:
       group: Descheduler
       overview: Overview
-      whatif: What if?
+      simulator: Simulator
       history: History
     title: Descheduler
     subtitle: What the descheduler sees, and whether it will move anything. Read-only.
@@ -2602,10 +2602,10 @@ harvester:
       podsCount: "{count} active pods"
       markLow: "Underutilized below {value}%"
       markTarget: "Overutilized above {value}%"
-    whatif:
-      title: What if?
+    simulator:
+      title: Simulator
       subtitle: Try other settings against the live cluster, check them with a real dry run, and see what would move.
-      note: "Try other thresholds against the live cluster. The simulation runs in your browser and changes nothing. Nothing here changes the cluster."
+      note: "Try other thresholds against the live cluster. The simulation runs in your browser and changes nothing."
       reset: Reset to active policy
       excluded: Excluded namespaces (their VMs are never evicted)
       badNamespaces: "Not valid namespace names: {list}. Use lowercase letters, digits and '-'."
@@ -2642,12 +2642,13 @@ harvester:
         invalidThresholds: A low threshold is above its target threshold. The real descheduler refuses to start with that, so nothing can be simulated.
         ran: Nothing would be evicted.
       tieNote: "Among VMs with the same priority and QoS the real descheduler picks in no particular order, so it may choose different ones than shown here, and sometimes a different number of them. Step 3 checks whether its choice still follows the same rules."
-      caveat: "Approximation of descheduler 0.33. The destination is a guess (the Kubernetes scheduler decides), nodeFit checks node selectors, node affinity, taints, cordon and free capacity (not pod affinity or topology spread), and one cycle is simulated."
+      caveatShort: An approximation of descheduler 0.33, for one cycle.
+      caveat: "The destination is a guess (the Kubernetes scheduler decides). nodeFit checks node selectors, node affinity, taints, cordon and free capacity, but not pod affinity or topology spread."
     history:
       title: Migration history
       kindsLabel: Migrations per cause
       subtitle: Who asked for each live migration, and why.
-      note: Who asked for each live migration? Only the migrations KubeVirt still keeps are listed.
+      note: Only the migrations KubeVirt still keeps are listed.
       empty: No migrations are recorded right now.
       activity: "Descheduler activity in the log ({cycles} cycles, {from} to {to}): {requests} eviction request(s), {evicted} pod(s) evicted."
       noLog: "The descheduler log could not be read ({message}), so evacuations cannot be attributed with certainty."

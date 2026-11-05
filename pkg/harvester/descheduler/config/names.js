@@ -13,8 +13,8 @@ export const PAGES = {
   overview: {
     type: 'descheduler-overview', path: 'descheduler/overview', route: route('-overview'), weight: 3, labelKey: 'harvester.descheduler.nav.overview'
   },
-  whatif: {
-    type: 'descheduler-whatif', path: 'descheduler/what-if', route: route('-what-if'), weight: 2, labelKey: 'harvester.descheduler.nav.whatif'
+  simulator: {
+    type: 'descheduler-simulator', path: 'descheduler/simulator', route: route('-simulator'), weight: 2, labelKey: 'harvester.descheduler.nav.simulator'
   },
   history: {
     type: 'descheduler-history', path: 'descheduler/history', route: route('-history'), weight: 1, labelKey: 'harvester.descheduler.nav.history'

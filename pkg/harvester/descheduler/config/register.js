@@ -1,5 +1,5 @@
 import { GROUP, HARVESTER_PRODUCT, NAV_GROUP, PAGES } from './names';
-/** Adds Advanced > Descheduler (Overview, What if?, History) to the Harvester side menu. */
+/** Adds Advanced > Descheduler (Overview, Simulator, History) to the Harvester side menu. */
 export function registerDescheduler(dsl) {
   const {
     virtualType, basicType, labelGroup, setGroupDefaultType

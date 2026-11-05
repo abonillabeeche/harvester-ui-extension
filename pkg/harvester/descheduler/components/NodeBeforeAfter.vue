@@ -65,7 +65,7 @@ const detail = (u, kind) => (kind === 'cpu' ? t('harvester.descheduler.nodes.det
 
     <p class="text-muted pods">
       {{ t('harvester.descheduler.nodes.podsCount', { count: after.pods }) }}<template v-if="before.pods !== after.pods">
-        ({{ t('harvester.descheduler.whatif.podsWas', { count: before.pods }) }})
+        ({{ t('harvester.descheduler.simulator.podsWas', { count: before.pods }) }})
       </template>
     </p>
     <ul
@@ -83,7 +83,7 @@ const detail = (u, kind) => (kind === 'cpu' ? t('harvester.descheduler.nodes.det
         v-if="outHead.more"
         class="out text-muted"
       >
-        − {{ t('harvester.descheduler.whatif.more', { count: outHead.more }) }}
+        − {{ t('harvester.descheduler.simulator.more', { count: outHead.more }) }}
       </li>
       <li
         v-for="e in inHead.shown"
@@ -96,14 +96,14 @@ const detail = (u, kind) => (kind === 'cpu' ? t('harvester.descheduler.nodes.det
         v-if="inHead.more"
         class="in text-muted"
       >
-        + {{ t('harvester.descheduler.whatif.more', { count: inHead.more }) }}
+        + {{ t('harvester.descheduler.simulator.more', { count: inHead.more }) }}
       </li>
     </ul>
     <p
       v-else
       class="text-muted"
     >
-      {{ t('harvester.descheduler.whatif.noChange') }}
+      {{ t('harvester.descheduler.simulator.noChange') }}
     </p>
   </section>
 </template>
