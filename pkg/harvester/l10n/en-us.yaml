@@ -2639,7 +2639,7 @@ harvester:
     dryRun:
       title: Dry Run
       note: "Dry-run mode evaluates evictions in memory. No virtual machines are evicted or migrated."
-      description: "Runs the descheduler once with the thresholds above in dry-run mode and opens its log. The run creates a Job and a ConfigMap in the kube-system namespace; both are deleted automatically one hour after the run completes."
+      description: "Runs the descheduler once with the thresholds above in dry-run mode. Select View Log to see its output. The run creates a Job and a ConfigMap in the kube-system namespace; both are deleted automatically one hour after the run completes."
       start: Dry Run
       viewLog: View Log
       noPermission: You do not have permission to create Jobs and ConfigMaps in kube-system.

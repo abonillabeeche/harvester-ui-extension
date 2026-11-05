@@ -9,8 +9,8 @@ const POD_TIMEOUT_MS = 60000;
 const canCreate = (schema) => (schema?.collectionMethods || []).some((m) => m.toUpperCase() === 'POST');
 
 /**
- * Runs the descheduler once in dry-run mode: creates the Job, opens its log in the dashboard's log window as soon as the pod
- * exists, and parses the evictions once the pod has finished.
+ * Runs the descheduler once in dry-run mode: creates the Job and parses the evictions once the pod has finished. `openLog`
+ * shows the pod log in the dashboard's log window.
  */
 export function useDryRun() {
   const store = useStore();
@@ -75,13 +75,8 @@ export function useDryRun() {
     }, { root: true });
   }
 
-  // Show the log as soon as the pod exists; read the result once it has finished.
-  watch(() => pod.value?.metadata?.uid, (uid) => {
-    if (uid) {
-      clearTimeout(timer);
-      openLog();
-    }
-  });
+  // The log opens only from View Log (the pod may not exist yet when the run starts); read the result once it has finished.
+  watch(() => pod.value?.metadata?.uid, (uid) => uid && clearTimeout(timer));
   watch(finished, async(done) => {
     if (!done || !pod.value) {
       return;
