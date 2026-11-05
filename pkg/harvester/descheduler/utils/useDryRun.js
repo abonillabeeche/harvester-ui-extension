@@ -58,8 +58,21 @@ export function useDryRun() {
     }
   }
 
+  // Opens the dashboard's log window. Dispatched directly (as the VM model's View Logs does): the Harvester store has no Pod
+  // model, so its pods do not have the shell's `openLogs()`.
   function openLog() {
-    pod.value?.openLogs?.('descheduler');
+    const p = pod.value;
+
+    if (!p) {
+      return;
+    }
+    store.dispatch('wm/open', {
+      id:        `${ p.id }-logs`,
+      label:     p.metadata.name,
+      icon:      'file',
+      component: 'ContainerLogs',
+      attrs:     { pod: p, initialContainer: 'descheduler' }
+    }, { root: true });
   }
 
   // Show the log as soon as the pod exists; read the result once it has finished.
