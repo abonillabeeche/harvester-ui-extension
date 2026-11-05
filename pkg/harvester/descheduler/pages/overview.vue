@@ -19,14 +19,13 @@ const result = computed(() => {
 
   return state.value?.policyError ? { ...v, key: 'badPolicy' } : v;
 });
-const names = (list) => (list.length ? list.join(', ') : t('harvester.descheduler.policy.none'));
 const bannerColor = computed(() => ({
   noPolicy: 'error', badPolicy: 'error', deviation: 'warning', noUnder: 'info', noOver: 'info', tooFewUnder: 'info', wouldAct: 'warning'
 }[result.value.key]));
-const verdictBody = computed(() => t(`harvester.descheduler.verdict.${ result.value.key }.body`, {
-  over:  names(result.value.over),
-  under: names(result.value.under),
-  count: result.value.under.length,
+// One line with host counts, not names: the host cards below already show which host is in which band.
+const verdictText = computed(() => t(`harvester.descheduler.verdict.${ result.value.key }`, {
+  over:  result.value.over.length,
+  under: result.value.under.length,
   max:   state.value?.policy?.maxNoOfPodsToEvictPerNode ?? '?'
 }));
 const band = (u) => (lno.value ? classify(u, lno.value) : null);
@@ -64,7 +63,7 @@ const excludedNamespaces = computed(() => state.value?.policy?.evictableNamespac
         <Banner
           v-if="dataOk && descheduler"
           :color="bannerColor"
-          :label="`${ t(`harvester.descheduler.verdict.${ result.key }.title`) }. ${ verdictBody }`"
+          :label="verdictText"
         />
       </div>
 

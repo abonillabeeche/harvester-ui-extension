@@ -422,7 +422,8 @@ const dryRunResult = computed(() => {
       </p>
       <div class="dry-run-actions">
         <button
-          class="btn role-primary"
+          class="btn"
+          :class="dryRun.hasPod.value ? 'role-secondary' : 'role-primary'"
           :disabled="!dryRun.allowed.value || dryRun.busy.value || sim.reason === 'invalidThresholds'"
           @click="startDryRun"
         >
@@ -430,7 +431,7 @@ const dryRunResult = computed(() => {
         </button>
         <button
           v-if="dryRun.hasPod.value"
-          class="btn role-secondary"
+          class="btn role-primary"
           @click="dryRun.openLog"
         >
           {{ t('harvester.descheduler.dryRun.viewLog') }}

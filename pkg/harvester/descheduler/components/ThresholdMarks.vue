@@ -41,10 +41,10 @@ const clamp = (v) => Math.min(Math.max(v, 0), 100);
 </template>
 
 <style lang="scss" scoped>
-.zone { position: absolute; top: 0; height: 100%; pointer-events: none; }
-.zone.under { background: repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(56, 139, 253, 0.25) 3px, rgba(56, 139, 253, 0.25) 6px); border-radius: 7px 0 0 7px; }
-.zone.over { background: repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(230, 140, 0, 0.3) 3px, rgba(230, 140, 0, 0.3) 6px); border-radius: 0 7px 7px 0; }
-.mark { position: absolute; top: -3px; width: 2px; height: 20px; background: var(--body-text); }
+.zone { position: absolute; z-index: 2; top: 0; height: 100%; pointer-events: none; }
+.zone.under { background: repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.45) 3px, rgba(255, 255, 255, 0.45) 6px); border-radius: 7px 0 0 7px; }
+.zone.over { background: repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.45) 3px, rgba(255, 255, 255, 0.45) 6px); border-radius: 0 7px 7px 0; }
+.mark { position: absolute; z-index: 3; top: -3px; width: 2px; height: 20px; background: var(--body-text); }
 .mark-label { position: absolute; top: 22px; font-size: 12px; line-height: 1; white-space: nowrap; color: var(--body-text); }
 // The low label hangs to the left of its marker and the high label to the right, so close thresholds do not overlap.
 .mark.under .mark-label { right: 0; }

@@ -2542,27 +2542,13 @@ harvester:
       move: Predicted migrations
       moveHint: "The result of one descheduler cycle with these thresholds, calculated in the browser. It can differ from the actual descheduler; use Dry Run to confirm."
     verdict:
-      noPolicy:
-        title: Descheduler policy not found
-        body: The ConfigMap kube-system/descheduler does not exist. Verify that the descheduler add-on is enabled.
-      badPolicy:
-        title: Descheduler policy is not valid
-        body: The ConfigMap kube-system/descheduler cannot be parsed. See Active Policy for details.
-      deviation:
-        title: Prediction not available
-        body: The policy uses deviation thresholds (useDeviationThresholds), which compare each host with the cluster average. This page only supports absolute thresholds.
-      noUnder:
-        title: No virtual machines are scheduled to move
-        body: "No host is underutilized, so no host can receive live-migrated virtual machines. A host is underutilized only when both CPU and memory are below the Underutilized thresholds. Overutilized hosts: {over}."
-      noOver:
-        title: No virtual machines are scheduled to move
-        body: "No host is overutilized, so there are no virtual machines to move. A host is overutilized when CPU or memory is above the Overutilized threshold. Underutilized hosts: {under}."
-      tooFewUnder:
-        title: No virtual machines are scheduled to move
-        body: "Only {count} host(s) are underutilized ({under}). The policy requires more than the number set in numberOfNodes."
-      wouldAct:
-        title: Virtual machines will be live migrated
-        body: "In its next cycle, the descheduler will evict virtual machines from {over} so that they can be live migrated to {under}. It evicts at most {max} virtual machines per host per cycle, only when another host has capacity (nodeFit), and never from excluded namespaces."
+      noPolicy: The descheduler policy (ConfigMap kube-system/descheduler) was not found. Verify that the descheduler add-on is enabled.
+      badPolicy: The descheduler policy cannot be parsed. See Active Policy for details.
+      deviation: No prediction is available. The policy uses deviation thresholds, which this page does not support.
+      noUnder: No virtual machines will be moved in the next cycle because no host is underutilized.
+      noOver: No virtual machines will be moved in the next cycle because no host is overutilized.
+      tooFewUnder: "No virtual machines will be moved in the next cycle because only {under} host(s) are underutilized and the policy requires more (numberOfNodes)."
+      wouldAct: "In the next cycle, the descheduler will move virtual machines from {over} overutilized host(s) to {under} underutilized host(s), up to {max} per host."
     run:
       notInstalled: The descheduler add-on is not installed. No virtual machines will be moved.
       disabled: The descheduler add-on is disabled. No virtual machines will be moved.
