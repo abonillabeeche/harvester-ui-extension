@@ -12,7 +12,7 @@ import { runState } from '../utils/status';
 const t = useTranslation();
 const {
   state, usages, errors, loading, updated, refresh, dataOk, descheduler
-} = useData(30000);
+} = useData();
 const lno = computed(() => state.value?.policy?.lowNodeUtilization || null);
 const result = computed(() => {
   const v = verdict(usages.value, lno.value);
@@ -21,7 +21,7 @@ const result = computed(() => {
 });
 const names = (list) => (list.length ? list.join(', ') : t('harvester.descheduler.policy.none'));
 const bannerColor = computed(() => ({
-  noPolicy: 'error', badPolicy: 'error', noUnder: 'info', noOver: 'info', tooFewUnder: 'info', wouldAct: 'warning'
+  noPolicy: 'error', badPolicy: 'error', deviation: 'warning', noUnder: 'info', noOver: 'info', tooFewUnder: 'info', wouldAct: 'warning'
 }[result.value.key]));
 const verdictBody = computed(() => t(`harvester.descheduler.verdict.${ result.value.key }.body`, {
   over:  names(result.value.over),
@@ -170,6 +170,12 @@ const excludedNamespaces = computed(() => state.value?.policy?.evictableNamespac
           {{ t('harvester.descheduler.nodes.title') }}
           <InfoTip :text="t('harvester.descheduler.nodes.note')" />
         </h2>
+        <p
+          v-if="lno"
+          class="text-muted legend"
+        >
+          {{ t('harvester.descheduler.nodes.legend') }}
+        </p>
         <div class="grid">
           <section
             v-for="u in usages"
@@ -220,6 +226,7 @@ const excludedNamespaces = computed(() => state.value?.policy?.evictableNamespac
 .summary-block p { margin: 0 0 8px; }
 
 .nodes-title { margin: 0 0 8px; }
+.legend { margin: 0 0 8px; max-width: 900px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-top: 12px; }
 .card { border: var(--border-width) solid var(--border); border-radius: var(--border-radius); padding: 16px; background: var(--box-bg); }
 .node-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
