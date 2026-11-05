@@ -16,6 +16,7 @@ import HarvesterMembers from '../pages/c/_cluster/members/index.vue';
 import ProjectNamespaces from '../pages/c/_cluster/projectsnamespaces.vue';
 import HarvesterAlertmanagerReceiver from '../pages/c/_cluster/alertmanagerconfig/_alertmanagerconfigid/receiver.vue';
 import HarvesterUnsupported from '../pages/c/_cluster/unsupported/index.vue';
+import { deschedulerRoutes } from '../descheduler/config/routes';
 import ForkliftDashboard from '../pages/c/_cluster/vm-migration/index.vue';
 import ForkliftVmMigrationWizard from '../pages/c/_cluster/vm-migration/vm-migration-wizard.vue';
 import ForkliftProviderWizard from '../pages/c/_cluster/vm-migration/provider-wizard.vue';
@@ -42,6 +43,7 @@ const routes = [
     path:      `/:product/c/:cluster/support`,
     component: HarvesterSupport,
   },
+  ...deschedulerRoutes,
   {
     route: {
       name:      `${ PRODUCT_NAME }-c-cluster-console-uid-serial`,

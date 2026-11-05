@@ -1,3 +1,4 @@
+import { registerDescheduler } from '../descheduler/config/register';
 import {
   NODE,
   CONFIG_MAP,
@@ -102,6 +103,8 @@ export function init($plugin, store) {
     configureType,
     virtualType,
     weightGroup,
+    labelGroup,
+    setGroupDefaultType,
   } = $plugin.DSL(store, PRODUCT_NAME);
 
   const isSingleVirtualCluster = process.env.rancherEnv === PRODUCT_NAME;
@@ -734,6 +737,10 @@ export function init($plugin, store) {
     ],
     'advanced'
   );
+
+  registerDescheduler({
+    virtualType, basicType, labelGroup, setGroupDefaultType
+  });
 
   configureType(HCI.CLUSTER_NETWORK, {
     realResource: HCI.SETTING,
